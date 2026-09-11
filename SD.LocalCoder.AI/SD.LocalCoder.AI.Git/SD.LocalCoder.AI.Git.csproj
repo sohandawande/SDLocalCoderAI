@@ -10,4 +10,9 @@
     <PackageReference Include="LibGit2Sharp" Version="0.32.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Abstractions\" />
+    <Folder Include="Services\" />
+  </ItemGroup>
+
 </Project>

@@ -1,8 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using OllamaSharp.Models.Chat;
-usi
+using SD.LocalCoder.AI.Model.Request;
 
 namespace SD.LocalCoder.AI.Api.Controllers.Chat
 {
@@ -20,7 +19,7 @@ namespace SD.LocalCoder.AI.Api.Controllers.Chat
         [HttpPost]
         public async Task<IActionResult> Chat([FromBody] ChatRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Prompt))
+            if (string.IsNullOrWhiteSpace(request?.Prompt))
                 return BadRequest(new { error = "Prompt is required" });
 
             try
@@ -30,7 +29,8 @@ namespace SD.LocalCoder.AI.Api.Controllers.Chat
                 var chatHistory = new ChatHistory();
                 chatHistory.AddSystemMessage(
                     "You are SD LocalCoder AI — an expert offline coding assistant. " +
-                    "Generate clean, production-ready code. Always follow best practices and explain briefly.");
+                    "Generate clean, production-ready, well-structured code. " +
+                    "Always follow best practices, use meaningful names, and explain the code briefly.");
 
                 chatHistory.AddUserMessage(request.Prompt);
 

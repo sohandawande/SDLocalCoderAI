@@ -1,3 +1,115 @@
-.vs/SDLocalCoderAI.slnx/FileContentIndex/7d71aad1-1185-4de6-91e0-c61f0afdae2f.vsidx
-/.vs
-/SD.LocalCoder.AI/.vs
+# ========================
+# .NET / C#
+# ========================
+## Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.dll
+*.exe
+*.pdb
+*.cache
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+## Visual Studio
+.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+*.user
+*.rsuser
+*.DotSettings.user
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## ASP.NET
+appsettings.*.local.json
+appsettings.Development.json
+!appsettings.json
+
+## Publish
+publish/
+*.publishproj
+
+## Others
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.pfx
+*.publishsettings
+orleans.codegen.cs
+
+# ========================
+# Ollama / Local Repos
+# ========================
+Repos/
+**/Repos/
+
+# ========================
+# Angular / Frontend (for later)
+# ========================
+node_modules/
+dist/
+.angular/
+.vscode/
+*.js.map
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# OS generated files
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ========================
+# Misc
+# ========================
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+.env
+.env.local
