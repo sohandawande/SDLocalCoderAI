@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="SD.LocalCoder.AI.Api/SD.LocalCoder.AI.Api.csproj" />
+  <Project Path="SD.LocalCoder.AI.Core/SD.LocalCoder.AI.Core.csproj" />
+  <Project Path="SD.LocalCoder.AI.Git/SD.LocalCoder.AI.Git.csproj" />
+  <Project Path="SD.LocalCoder.AI.Indexing/SD.LocalCoder.AI.Indexing.csproj" />
+  <Project Path="SD.LocalCoder.AI.Model/SD.LocalCoder.AI.Model.csproj" />
+  <Project Path="SD.LocalCoder.AI.Shared/SD.LocalCoder.AI.Shared.csproj" />
+</Solution>

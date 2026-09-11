@@ -1,0 +1,6 @@
+@SD.LocalCoder.AI.Api_HostAddress = http://localhost:5101
+
+GET {{SD.LocalCoder.AI.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
