@@ -1,14 +1,14 @@
-using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
 using SD.LocalCoder.AI.Core.Interfaces;
 using SD.LocalCoder.AI.Git.Interfaces;
 using SD.LocalCoder.AI.Model.Request.Chat;
 using SD.LocalCoder.AI.Model.Response.Chat;
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SD.LocalCoder.AI.Core.Services
 {
@@ -125,9 +125,9 @@ namespace SD.LocalCoder.AI.Core.Services
         }
 
         public async IAsyncEnumerable<(string Event, string Data)> SendStreamAsync(
-            string sessionId,
-            SessionMessageRequest request,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    string sessionId,
+    SessionMessageRequest request,
+    [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             if (!_sessions.TryGetValue(sessionId, out var state))
             {
@@ -141,10 +141,12 @@ namespace SD.LocalCoder.AI.Core.Services
                 yield break;
             }
 
-            List<string> includedPaths;
-            string userContent;
-            ChatHistory history;
+            List<string> includedPaths = null;
+            string userContent = null;
+            ChatHistory history = null;
+            Exception repoException = null;
 
+            // 1. Context and History building
             try
             {
                 var paths = request.Paths?.Count > 0 ? request.Paths : state.DefaultPaths;
@@ -167,16 +169,23 @@ namespace SD.LocalCoder.AI.Core.Services
             }
             catch (Exception ex)
             {
-                yield return ("error", ex.Message);
+                repoException = ex;
+            }
+
+            if (repoException != null)
+            {
+                yield return ("error", repoException.Message);
                 yield break;
             }
 
-            if (includedPaths.Count > 0)
+            if (includedPaths?.Count > 0)
                 yield return ("context", JsonSerializer.Serialize(includedPaths, JsonOpts));
 
             var assistantSb = new StringBuilder();
+            IAsyncEnumerable<StreamingChatMessageContent> stream = null;
+            Exception serviceException = null;
 
-            IAsyncEnumerable<StreamingChatMessageContent> stream;
+            // 2. Chat Service initialization
             try
             {
                 var chatService = _kernel.GetRequiredService<IChatCompletionService>();
@@ -186,18 +195,57 @@ namespace SD.LocalCoder.AI.Core.Services
             }
             catch (Exception ex)
             {
-                yield return ("error", ex.Message);
+                serviceException = ex;
+            }
+
+            if (serviceException != null)
+            {
+                yield return ("error", serviceException.Message);
                 yield break;
             }
 
-            await foreach (var chunk in stream.WithCancellation(cancellationToken))
+            // 3. Safe Stream consumption using manual enumeration
+            // This avoids putting a yield return statement inside a try-catch block.
+            await using var enumerator = stream.WithCancellation(cancellationToken).GetAsyncEnumerator();
+
+            while (true)
             {
-                var piece = chunk.Content;
+                bool hasNext;
+                StreamingChatMessageContent chunk = null;
+                Exception streamException = null;
+
+                try
+                {
+                    // Only wrap the move next operation which can throw mid-stream exceptions
+                    hasNext = await enumerator.MoveNextAsync();
+                    if (hasNext)
+                    {
+                        chunk = enumerator.Current;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    streamException = ex;
+                    hasNext = false;
+                }
+
+                if (streamException != null)
+                {
+                    yield return ("error", streamException.Message);
+                    yield break;
+                }
+
+                if (!hasNext)
+                {
+                    break; // Stream ended normally
+                }
+
+                var piece = chunk?.Content;
                 if (string.IsNullOrEmpty(piece))
                     continue;
 
                 assistantSb.Append(piece);
-                yield return ("token", piece);
+                yield return ("token", piece); // Perfectly valid outside of try-catch
             }
 
             var assistantText = assistantSb.ToString();
@@ -207,7 +255,7 @@ namespace SD.LocalCoder.AI.Core.Services
                 Role = "assistant",
                 Content = assistantText,
                 AtUtc = DateTime.UtcNow,
-                IncludedPaths = includedPaths.Count > 0 ? includedPaths : null
+                IncludedPaths = includedPaths?.Count > 0 ? includedPaths : null
             });
 
             while (state.Messages.Count > MaxHistoryMessages)
@@ -218,6 +266,7 @@ namespace SD.LocalCoder.AI.Core.Services
             var dto = ToDto(state);
             yield return ("done", JsonSerializer.Serialize(dto, JsonOpts));
         }
+
 
         private ChatHistory BuildChatHistory(SessionState state, string latestUserContentWithContext)
         {

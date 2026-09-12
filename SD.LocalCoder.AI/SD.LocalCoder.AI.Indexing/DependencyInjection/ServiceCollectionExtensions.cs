@@ -1,10 +1,14 @@
-﻿namespace SD.LocalCoder.AI.Indexing.DependencyInjection
+using Microsoft.Extensions.DependencyInjection;
+using SD.LocalCoder.AI.Indexing.Services;
+
+namespace SD.LocalCoder.AI.Indexing.DependencyInjection;
+
+public static class ServiceCollectionExtensions
 {
-    public static class ServiceCollectionExtensions
+    public static IServiceCollection AddIndexingLayer(
+        this IServiceCollection services)
     {
-        //public static IServiceCollection AddIndexingLayer(this IServiceCollection services, IConfiguration configuration)
-        //{
-        //    return services;
-        //}
+        services.AddSingleton<RepositoryIndexer>();
+        return services;
     }
 }
