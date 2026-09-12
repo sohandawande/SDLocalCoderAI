@@ -1,0 +1,29 @@
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+:root {
+  --lc-bg: #0f1419;
+  --lc-panel: #1a2332;
+  --lc-border: #2d3a4f;
+  --lc-accent: #3b82f6;
+  --lc-text: #e7ecf3;
+  --lc-muted: #8b9bb4;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--lc-bg);
+  color: var(--lc-text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+pre,
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.lc-scroll {
+  overflow: auto;
+}
