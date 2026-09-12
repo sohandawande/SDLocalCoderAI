@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -23,6 +25,11 @@ namespace SD.LocalCoder.AI.Core.Services
         private const int MaxFiles = 20;
         private const int MaxSingleFileChars = 25_000;
         private const int MaxHistoryMessages = 40;
+
+        private static readonly JsonSerializerOptions JsonOpts = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
 
         private static readonly HashSet<string> CodeExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -103,18 +110,48 @@ namespace SD.LocalCoder.AI.Core.Services
             SessionMessageRequest request,
             CancellationToken cancellationToken = default)
         {
+            await foreach (var (evt, data) in SendStreamAsync(sessionId, request, cancellationToken))
+            {
+                if (evt == "error")
+                    return (false, null, data);
+                if (evt == "done")
+                {
+                    var session = JsonSerializer.Deserialize<ChatSessionDto>(data, JsonOpts);
+                    return (true, session, null);
+                }
+            }
+
+            return (false, null, "Empty stream");
+        }
+
+        public async IAsyncEnumerable<(string Event, string Data)> SendStreamAsync(
+            string sessionId,
+            SessionMessageRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
             if (!_sessions.TryGetValue(sessionId, out var state))
-                return (false, null, "Session not found");
+            {
+                yield return ("error", "Session not found");
+                yield break;
+            }
 
             if (string.IsNullOrWhiteSpace(request?.Prompt))
-                return (false, null, "Prompt is required");
+            {
+                yield return ("error", "Prompt is required");
+                yield break;
+            }
+
+            List<string> includedPaths;
+            string userContent;
+            ChatHistory history;
 
             try
             {
                 var paths = request.Paths?.Count > 0 ? request.Paths : state.DefaultPaths;
-                var (contextBlock, includedPaths) = BuildRepositoryContext(state.RepoId, request.Prompt, paths);
+                var (contextBlock, pathsIncluded) = BuildRepositoryContext(state.RepoId, request.Prompt, paths);
+                includedPaths = pathsIncluded.ToList();
 
-                var userContent = string.IsNullOrWhiteSpace(contextBlock)
+                userContent = string.IsNullOrWhiteSpace(contextBlock)
                     ? request.Prompt
                     : BuildUserMessageWithContext(state.RepoId, contextBlock, request.Prompt);
 
@@ -123,37 +160,63 @@ namespace SD.LocalCoder.AI.Core.Services
                     Role = "user",
                     Content = request.Prompt,
                     AtUtc = DateTime.UtcNow,
-                    IncludedPaths = includedPaths.Count > 0 ? includedPaths.ToList() : null
+                    IncludedPaths = includedPaths.Count > 0 ? includedPaths : null
                 });
 
-                var chatService = _kernel.GetRequiredService<IChatCompletionService>();
-                var history = BuildChatHistory(state, userContent);
-
-                var result = await chatService.GetChatMessageContentAsync(
-                    history,
-                    cancellationToken: cancellationToken);
-
-                var assistantText = result.Content ?? string.Empty;
-
-                state.Messages.Add(new ChatMessageDto
-                {
-                    Role = "assistant",
-                    Content = assistantText,
-                    AtUtc = DateTime.UtcNow,
-                    IncludedPaths = includedPaths.Count > 0 ? includedPaths.ToList() : null
-                });
-
-                // Keep memory bounded
-                while (state.Messages.Count > MaxHistoryMessages)
-                    state.Messages.RemoveAt(0);
-
-                state.UpdatedAtUtc = DateTime.UtcNow;
-                return (true, ToDto(state), null);
+                history = BuildChatHistory(state, userContent);
             }
             catch (Exception ex)
             {
-                return (false, null, ex.Message);
+                yield return ("error", ex.Message);
+                yield break;
             }
+
+            if (includedPaths.Count > 0)
+                yield return ("context", JsonSerializer.Serialize(includedPaths, JsonOpts));
+
+            var assistantSb = new StringBuilder();
+
+            IAsyncEnumerable<StreamingChatMessageContent> stream;
+            try
+            {
+                var chatService = _kernel.GetRequiredService<IChatCompletionService>();
+                stream = chatService.GetStreamingChatMessageContentsAsync(
+                    history,
+                    cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                yield return ("error", ex.Message);
+                yield break;
+            }
+
+            await foreach (var chunk in stream.WithCancellation(cancellationToken))
+            {
+                var piece = chunk.Content;
+                if (string.IsNullOrEmpty(piece))
+                    continue;
+
+                assistantSb.Append(piece);
+                yield return ("token", piece);
+            }
+
+            var assistantText = assistantSb.ToString();
+
+            state.Messages.Add(new ChatMessageDto
+            {
+                Role = "assistant",
+                Content = assistantText,
+                AtUtc = DateTime.UtcNow,
+                IncludedPaths = includedPaths.Count > 0 ? includedPaths : null
+            });
+
+            while (state.Messages.Count > MaxHistoryMessages)
+                state.Messages.RemoveAt(0);
+
+            state.UpdatedAtUtc = DateTime.UtcNow;
+
+            var dto = ToDto(state);
+            yield return ("done", JsonSerializer.Serialize(dto, JsonOpts));
         }
 
         private ChatHistory BuildChatHistory(SessionState state, string latestUserContentWithContext)
@@ -163,9 +226,13 @@ namespace SD.LocalCoder.AI.Core.Services
                 "You are SD LocalCoder AI — an expert offline/online coding assistant. " +
                 "Generate clean, production-ready code in any language the user asks for. " +
                 "Follow best practices, meaningful names, and match repository style when context is provided. " +
-                "When suggesting file changes, clearly mark the target path so the user can apply them.");
+                "When proposing a full file to apply into the repo, use this exact format:\n" +
+                "### FILE: relative/path/File.ext\n" +
+                "```language\n" +
+                "...file contents...\n" +
+                "```\n" +
+                "You may include multiple FILE blocks in one reply.");
 
-            // Prior turns (stored prompts only for user side to avoid re-injecting huge context every time)
             var prior = state.Messages.Take(state.Messages.Count - 1).ToList();
             foreach (var msg in prior)
             {
@@ -175,7 +242,6 @@ namespace SD.LocalCoder.AI.Core.Services
                     history.AddAssistantMessage(msg.Content);
             }
 
-            // Latest user turn may include fresh repo context
             history.AddUserMessage(latestUserContentWithContext);
             return history;
         }

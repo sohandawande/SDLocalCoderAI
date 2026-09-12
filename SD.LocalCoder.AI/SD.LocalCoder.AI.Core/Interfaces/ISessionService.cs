@@ -14,5 +14,13 @@ namespace SD.LocalCoder.AI.Core.Interfaces
             string sessionId,
             SessionMessageRequest request,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Streams assistant tokens. Yields ("token", text) chunks, then ("done", sessionJson) or ("error", message).
+        /// </summary>
+        IAsyncEnumerable<(string Event, string Data)> SendStreamAsync(
+            string sessionId,
+            SessionMessageRequest request,
+            CancellationToken cancellationToken = default);
     }
 }

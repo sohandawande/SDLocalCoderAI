@@ -3,7 +3,9 @@
     <div class="brand">
       <i class="bi bi-code-slash"></i>
       <strong>SD LocalCoder AI</strong>
-      <span class="badge text-bg-secondary ms-2">offline · online ready</span>
+      <span class="badge ms-2" [class.text-bg-success]="provider()?.mode === 'offline'" [class.text-bg-info]="provider()?.mode !== 'offline'">
+        {{ provider()?.mode || '…' }} · {{ provider()?.modelId || 'model' }}
+      </span>
     </div>
     <div class="top-actions" *ngIf="error()">
       <span class="text-danger small">{{ error() }}</span>
@@ -12,7 +14,6 @@
   </header>
 
   <div class="grid">
-    <!-- Left: repos + files -->
     <aside class="panel left">
       <h6>Repositories</h6>
       <div class="input-group input-group-sm mb-2">
@@ -26,19 +27,14 @@
 
       <ul class="list-unstyled repo-list">
         <li *ngFor="let r of repos()">
-          <button
-            type="button"
-            class="repo-btn"
-            [class.active]="selectedRepoId() === r"
-            (click)="selectRepo(r)"
-          >
+          <button type="button" class="repo-btn" [class.active]="selectedRepoId() === r" (click)="selectRepo(r)">
             <i class="bi bi-folder2"></i> {{ r }}
           </button>
         </li>
         <li *ngIf="repos().length === 0" class="text-muted small">No repos yet</li>
       </ul>
 
-      <h6 class="mt-3">Files <span class="text-muted">(click = open, checkbox = context)</span></h6>
+      <h6 class="mt-3">Files</h6>
       <div class="file-list lc-scroll">
         <label class="file-row" *ngFor="let f of files()">
           <input type="checkbox" [checked]="selectedPaths().includes(f)" (change)="togglePath(f)" />
@@ -47,7 +43,6 @@
       </div>
     </aside>
 
-    <!-- Center: chat -->
     <main class="panel center">
       <div class="session-bar">
         <button class="btn btn-sm btn-success" type="button" (click)="newSession()" [disabled]="busy()">
@@ -59,23 +54,27 @@
           (ngModelChange)="openSession($event)"
         >
           <option value="" disabled>Select session</option>
-          <option *ngFor="let s of sessions()" [value]="s.sessionId">
-            {{ s.title }} ({{ s.sessionId }})
-          </option>
+          <option *ngFor="let s of sessions()" [value]="s.sessionId">{{ s.title }}</option>
         </select>
         <span class="text-muted small" *ngIf="activeSession()?.repoId">repo: {{ activeSession()?.repoId }}</span>
       </div>
 
-      <div class="messages lc-scroll" #msgBox>
+      <div class="messages lc-scroll">
         <div *ngIf="!activeSession()" class="empty">
-          Create a session, optionally bound to a repo, then describe the code you want.
+          Create a session, bind a repo, describe the code you want in any language.
         </div>
-        <div *ngFor="let m of messages(); trackBy: trackMsg" class="msg" [class.user]="m.role === 'user'" [class.assistant]="m.role === 'assistant'">
+        <div
+          *ngFor="let m of messages(); trackBy: trackMsg"
+          class="msg"
+          [class.user]="m.role === 'user'"
+          [class.assistant]="m.role === 'assistant'"
+        >
           <div class="role">{{ m.role }}</div>
           <pre class="body">{{ m.content }}</pre>
-          <div class="paths" *ngIf="m.includedPaths?.length">
-            context: {{ m.includedPaths?.join(', ') }}
-          </div>
+        </div>
+        <div class="msg assistant" *ngIf="streamingText()">
+          <div class="role">assistant · streaming</div>
+          <pre class="body">{{ streamingText() }}</pre>
         </div>
       </div>
 
@@ -83,34 +82,41 @@
         <textarea
           class="form-control"
           rows="3"
-          placeholder="Prompt any language… e.g. Add a REST controller for products matching existing style"
+          placeholder="Prompt… Ctrl+Enter to send (streams live)"
           [ngModel]="prompt()"
           (ngModelChange)="prompt.set($event)"
           (keydown.control.enter)="send()"
         ></textarea>
         <button class="btn btn-primary" type="button" (click)="send()" [disabled]="busy() || !activeSession()">
-          {{ busy() ? 'Working…' : 'Send' }}
+          {{ busy() ? 'Streaming…' : 'Send' }}
         </button>
       </div>
     </main>
 
-    <!-- Right: preview / apply -->
     <aside class="panel right">
-      <h6>File preview & apply</h6>
+      <h6>Apply to repo</h6>
+      <div class="mb-2" *ngIf="suggestedFiles().length">
+        <div class="text-muted small mb-1">Detected FILE blocks</div>
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-info me-1 mb-1"
+          *ngFor="let s of suggestedFiles()"
+          (click)="loadSuggestion(s)"
+        >
+          {{ s.path }}
+        </button>
+      </div>
       <input class="form-control form-control-sm mb-2" placeholder="Relative path" [ngModel]="applyPath()" (ngModelChange)="applyPath.set($event)" />
       <textarea
         class="form-control code-area mb-2"
-        rows="18"
+        rows="16"
         [ngModel]="applyContent()"
         (ngModelChange)="applyContent.set($event)"
-        placeholder="Paste or edit generated code, then Apply to write into the repo"
+        placeholder="Generated code / file contents"
       ></textarea>
       <button class="btn btn-warning btn-sm w-100" type="button" (click)="applyFile()" [disabled]="busy() || !selectedRepoId()">
         <i class="bi bi-floppy"></i> Apply to repo
       </button>
-      <p class="text-muted small mt-2 mb-0">
-        Writes UTF-8 file under the selected repo (creates folders). Path traversal is blocked on the API.
-      </p>
     </aside>
   </div>
 </div>

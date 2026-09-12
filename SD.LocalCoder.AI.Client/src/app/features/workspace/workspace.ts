@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GitApiService } from '../../core/api/git-api.service';
 import { SessionApiService } from '../../core/api/session-api.service';
+import { ProviderApiService, ProviderInfo } from '../../core/api/provider-api.service';
 import { ChatMessage, ChatSession } from '../../core/api/api.types';
 
 @Component({
@@ -14,6 +15,7 @@ import { ChatMessage, ChatSession } from '../../core/api/api.types';
 export class Workspace {
   private readonly gitApi = inject(GitApiService);
   private readonly sessionApi = inject(SessionApiService);
+  private readonly providerApi = inject(ProviderApiService);
 
   readonly repos = signal<string[]>([]);
   readonly selectedRepoId = signal<string | null>(null);
@@ -26,17 +28,24 @@ export class Workspace {
   readonly prompt = signal('');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
+  readonly streamingText = signal('');
+  readonly provider = signal<ProviderInfo | null>(null);
 
   readonly cloneUrl = signal('');
   readonly localPath = signal('');
   readonly applyPath = signal('');
   readonly applyContent = signal('');
+  readonly suggestedFiles = signal<{ path: string; content: string }[]>([]);
 
   readonly messages = computed(() => this.activeSession()?.messages ?? []);
 
   constructor() {
     this.refreshRepos();
     this.refreshSessions();
+    this.providerApi.get().subscribe({
+      next: (p) => this.provider.set(p),
+      error: () => this.provider.set(null),
+    });
   }
 
   refreshRepos() {
@@ -50,7 +59,7 @@ export class Workspace {
     this.sessionApi.list().subscribe({
       next: (s) => this.sessions.set(s ?? []),
       error: () => {
-        /* ignore empty */
+        /* ignore */
       },
     });
   }
@@ -67,9 +76,7 @@ export class Workspace {
 
   togglePath(path: string) {
     const cur = this.selectedPaths();
-    this.selectedPaths.set(
-      cur.includes(path) ? cur.filter((p) => p !== path) : [...cur, path],
-    );
+    this.selectedPaths.set(cur.includes(path) ? cur.filter((p) => p !== path) : [...cur, path]);
   }
 
   openFile(path: string) {
@@ -133,6 +140,8 @@ export class Workspace {
         next: (s) => {
           this.busy.set(false);
           this.activeSession.set(s);
+          this.streamingText.set('');
+          this.suggestedFiles.set([]);
           this.refreshSessions();
         },
         error: (e) => {
@@ -146,31 +155,71 @@ export class Workspace {
     this.sessionApi.get(sessionId).subscribe({
       next: (s) => {
         this.activeSession.set(s);
+        this.streamingText.set('');
         if (s.repoId) this.selectRepo(s.repoId);
       },
       error: (e) => this.error.set(e?.error?.error ?? 'Session not found'),
     });
   }
 
-  send() {
+  async send() {
     const session = this.activeSession();
     const text = this.prompt().trim();
     if (!session || !text || this.busy()) return;
 
     this.busy.set(true);
     this.error.set(null);
-    this.sessionApi.send(session.sessionId, text, this.selectedPaths()).subscribe({
-      next: (r) => {
+    this.streamingText.set('');
+    this.suggestedFiles.set([]);
+
+    // Optimistic user message
+    const optimistic: ChatSession = {
+      ...session,
+      messages: [
+        ...session.messages,
+        { role: 'user', content: text, atUtc: new Date().toISOString() },
+      ],
+    };
+    this.activeSession.set(optimistic);
+    this.prompt.set('');
+
+    await this.sessionApi.sendStream(session.sessionId, text, this.selectedPaths(), {
+      onToken: (t) => this.streamingText.update((s) => s + t),
+      onDone: (s) => {
+        this.activeSession.set(s);
+        this.streamingText.set('');
         this.busy.set(false);
-        this.activeSession.set(r.session);
-        this.prompt.set('');
         this.refreshSessions();
+        const last = [...s.messages].reverse().find((m) => m.role === 'assistant');
+        if (last) this.extractApplyBlocks(last.content);
       },
-      error: (e) => {
+      onError: (msg) => {
         this.busy.set(false);
-        this.error.set(e?.error?.error ?? 'Chat failed');
+        this.error.set(msg);
+        this.streamingText.set('');
       },
     });
+  }
+
+  /** Parse ### FILE: path + fenced code from assistant output */
+  extractApplyBlocks(content: string) {
+    const blocks: { path: string; content: string }[] = [];
+    const re =
+      /###\s*FILE:\s*([^\n]+)\s*```[^\n]*\n([\s\S]*?)```/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      blocks.push({ path: m[1].trim(), content: m[2].replace(/\s+$/, '') });
+    }
+    this.suggestedFiles.set(blocks);
+    if (blocks.length === 1) {
+      this.applyPath.set(blocks[0].path);
+      this.applyContent.set(blocks[0].content);
+    }
+  }
+
+  loadSuggestion(s: { path: string; content: string }) {
+    this.applyPath.set(s.path);
+    this.applyContent.set(s.content);
   }
 
   applyFile() {

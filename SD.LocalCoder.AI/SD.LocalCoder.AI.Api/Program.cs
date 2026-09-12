@@ -1,12 +1,18 @@
+using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel;
 using Scalar.AspNetCore;
 using SD.LocalCoder.AI.Api.DependencyInjection;
 using SD.LocalCoder.AI.Core.DependencyInjection;
 using SD.LocalCoder.AI.Git.DependencyInjection;
+using SD.LocalCoder.AI.Model.Common.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.Services.Configure<AiProviderOptions>(
+    builder.Configuration.GetSection(AiProviderOptions.SectionName));
+
+var ai = builder.Configuration.GetSection(AiProviderOptions.SectionName).Get<AiProviderOptions>()
+          ?? new AiProviderOptions();
 
 builder.Services.AddControllers();
 builder.Services.AddApiLayer(builder.Configuration);
@@ -15,7 +21,6 @@ builder.Services.AddCoreLayer(builder.Configuration);
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 
-// CORS for Angular later
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngular", policy =>
@@ -26,17 +31,16 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ===== Ollama via OpenAI-compatible endpoint =====
+// Offline Ollama or online OpenAI-compatible endpoint (config-driven)
 builder.Services.AddKernel()
     .AddOpenAIChatCompletion(
-        modelId: "qwen2.5-coder:14b",               // Change to your model name
-        apiKey: "ollama",                           // Any non-empty string is fine
-        endpoint: new Uri("http://localhost:11434/v1")
+        modelId: ai.ModelId,
+        apiKey: string.IsNullOrWhiteSpace(ai.ApiKey) ? "ollama" : ai.ApiKey,
+        endpoint: new Uri(ai.Endpoint)
     );
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
