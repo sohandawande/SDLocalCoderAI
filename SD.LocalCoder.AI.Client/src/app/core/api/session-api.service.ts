@@ -34,9 +34,6 @@ export class SessionApiService {
     );
   }
 
-  /**
-   * SSE stream: events token | context | done | error
-   */
   async sendStream(
     sessionId: string,
     prompt: string,
@@ -67,28 +64,45 @@ export class SessionApiService {
     const decoder = new TextDecoder();
     let buffer = '';
     let eventName = 'message';
+    let dataLines: string[] = [];
+
+    const flush = () => {
+      if (dataLines.length === 0) {
+        eventName = 'message';
+        return;
+      }
+      const data = dataLines.join('\n');
+      dataLines = [];
+      this.dispatch(eventName, data, handlers);
+      eventName = 'message';
+    };
 
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        flush();
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const parts = buffer.split('\n');
       buffer = parts.pop() ?? '';
 
-      for (const line of parts) {
+      for (const raw of parts) {
+        const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+
         if (line.startsWith('event:')) {
           eventName = line.slice(6).trim();
           continue;
         }
         if (line.startsWith('data:')) {
-          const data = line.slice(5).trimStart();
-          // continuation lines are merged by our server with "data: " prefix already split per line
-          this.dispatch(eventName, data, handlers);
+          // SSE: optional single space after data:
+          const payload = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
+          dataLines.push(payload);
           continue;
         }
         if (line === '') {
-          eventName = 'message';
+          flush();
         }
       }
     }
@@ -110,7 +124,7 @@ export class SessionApiService {
     if (eventName === 'done') {
       try {
         handlers.onDone?.(JSON.parse(data) as ChatSession);
-      } catch (e) {
+      } catch {
         handlers.onError?.('Failed to parse session');
       }
       return;
