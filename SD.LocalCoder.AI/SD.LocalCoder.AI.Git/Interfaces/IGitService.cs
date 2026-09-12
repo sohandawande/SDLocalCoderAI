@@ -1,4 +1,4 @@
-﻿namespace SD.LocalCoder.AI.Git.Interfaces
+namespace SD.LocalCoder.AI.Git.Interfaces
 {
     public interface IGitService
     {
@@ -12,5 +12,13 @@
         List<string> GetFileList(string repoId);
         string? ReadFileContent(string repoId, string relativePath);
         string GetRepoPath(string repoId);
+
+        /// <summary>List known repo ids under the Repos folder.</summary>
+        List<string> ListRepoIds();
+
+        /// <summary>
+        /// Write or create a file inside the repo. Returns false if path is invalid/unsafe.
+        /// </summary>
+        (bool Success, string Message) WriteFileContent(string repoId, string relativePath, string content);
     }
 }

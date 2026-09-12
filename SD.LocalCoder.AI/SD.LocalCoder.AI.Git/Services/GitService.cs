@@ -1,4 +1,4 @@
-﻿using LibGit2Sharp;
+using LibGit2Sharp;
 using SD.LocalCoder.AI.Git.Interfaces;
 using System.Text;
 
@@ -51,7 +51,6 @@ namespace SD.LocalCoder.AI.Git.Services
                 var repoId = $"{repoName}_{Guid.NewGuid().ToString()[..8]}";
                 var targetPath = Path.Combine(_reposBasePath, repoId);
 
-                // Copy the local folder into our Repos directory
                 await Task.Run(() => CopyDirectory(localPath, targetPath));
 
                 return (true, "Local repository added successfully", repoId);
@@ -78,7 +77,8 @@ namespace SD.LocalCoder.AI.Git.Services
 
         public string? ReadFileContent(string repoId, string relativePath)
         {
-            var fullPath = Path.Combine(_reposBasePath, repoId, relativePath);
+            if (!TryResolveSafePath(repoId, relativePath, out var fullPath))
+                return null;
 
             if (!System.IO.File.Exists(fullPath))
                 return null;
@@ -86,12 +86,71 @@ namespace SD.LocalCoder.AI.Git.Services
             return System.IO.File.ReadAllText(fullPath, Encoding.UTF8);
         }
 
+        public (bool Success, string Message) WriteFileContent(string repoId, string relativePath, string content)
+        {
+            if (string.IsNullOrWhiteSpace(repoId))
+                return (false, "RepoId is required");
+
+            if (string.IsNullOrWhiteSpace(relativePath))
+                return (false, "Path is required");
+
+            var repoPath = Path.Combine(_reposBasePath, repoId);
+            if (!Directory.Exists(repoPath))
+                return (false, "Repository not found");
+
+            if (!TryResolveSafePath(repoId, relativePath, out var fullPath))
+                return (false, "Invalid or unsafe path");
+
+            try
+            {
+                var dir = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+
+                System.IO.File.WriteAllText(fullPath, content ?? string.Empty, Encoding.UTF8);
+                return (true, "File written successfully");
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Failed to write file: {ex.Message}");
+            }
+        }
+
         public string GetRepoPath(string repoId)
         {
             return Path.Combine(_reposBasePath, repoId);
         }
 
-        // Helper method to copy directory
+        public List<string> ListRepoIds()
+        {
+            if (!Directory.Exists(_reposBasePath))
+                return new List<string>();
+
+            return Directory.GetDirectories(_reposBasePath)
+                .Select(Path.GetFileName)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .OrderBy(n => n)
+                .ToList()!;
+        }
+
+        private bool TryResolveSafePath(string repoId, string relativePath, out string fullPath)
+        {
+            fullPath = string.Empty;
+            var repoPath = Path.GetFullPath(Path.Combine(_reposBasePath, repoId));
+
+            var normalized = relativePath.Replace('\\', '/').Trim().TrimStart('/');
+            if (normalized.Contains("..", StringComparison.Ordinal) ||
+                Path.IsPathRooted(relativePath))
+                return false;
+
+            var candidate = Path.GetFullPath(Path.Combine(repoPath, normalized));
+            if (!candidate.StartsWith(repoPath, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            fullPath = candidate;
+            return true;
+        }
+
         private void CopyDirectory(string sourceDir, string destinationDir)
         {
             var dir = new DirectoryInfo(sourceDir);
@@ -105,7 +164,6 @@ namespace SD.LocalCoder.AI.Git.Services
 
             foreach (var subDir in dir.GetDirectories())
             {
-                // Skip .git folder
                 if (subDir.Name.Equals(".git", StringComparison.OrdinalIgnoreCase))
                     continue;
 

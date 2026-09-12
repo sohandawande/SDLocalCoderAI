@@ -10,6 +10,7 @@ namespace SD.LocalCoder.AI.Core.DependencyInjection
         public static IServiceCollection AddCoreLayer(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddScoped<IChatService, ChatService>();
+            services.AddSingleton<ISessionService, SessionService>();
             return services;
         }
     }
