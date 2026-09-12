@@ -1,6 +1,7 @@
 using Microsoft.SemanticKernel;
 using Scalar.AspNetCore;
 using SD.LocalCoder.AI.Api.DependencyInjection;
+using SD.LocalCoder.AI.Core.DependencyInjection;
 using SD.LocalCoder.AI.Git.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddApiLayer(builder.Configuration);
 builder.Services.AddGitLayer(builder.Configuration);
+builder.Services.AddCoreLayer(builder.Configuration);
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
 

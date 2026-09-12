@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -10,6 +10,11 @@
     <PackageReference Include="Microsoft.SemanticKernel" Version="1.80.1" />
     <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.80.1" />
     <PackageReference Include="OllamaSharp" Version="5.4.30" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SD.LocalCoder.AI.Git\SD.LocalCoder.AI.Git.csproj" />
+    <ProjectReference Include="..\SD.LocalCoder.AI.Model\SD.LocalCoder.AI.Model.csproj" />
   </ItemGroup>
 
 </Project>
