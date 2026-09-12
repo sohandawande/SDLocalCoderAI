@@ -1,4 +1,4 @@
-﻿namespace SD.LocalCoder.AI.Model.Request
+﻿namespace SD.LocalCoder.AI.Model.Request.Chat
 {
     public class ChatRequest
     {

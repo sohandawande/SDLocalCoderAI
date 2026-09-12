@@ -1,14 +1,17 @@
 using Microsoft.SemanticKernel;
+using Scalar.AspNetCore;
+using SD.LocalCoder.AI.Api.DependencyInjection;
+using SD.LocalCoder.AI.Git.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddApiLayer(builder.Configuration);
+builder.Services.AddGitLayer(builder.Configuration);
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
 
 // CORS for Angular later
 builder.Services.AddCors(options =>
@@ -35,12 +38,12 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    //app.UseSwagger();
-    //app.UseSwaggerUI();
+    app.MapScalarApiReference();
 }
 
 app.UseCors("AllowAngular");
 app.UseHttpsRedirection();
+app.UseRouting();
 app.UseAuthorization();
 app.MapControllers();
 

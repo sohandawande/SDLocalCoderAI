@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-using SD.LocalCoder.AI.Model.Request;
+using SD.LocalCoder.AI.Model.Request.Chat;
 
 namespace SD.LocalCoder.AI.Api.Controllers.Chat
 {
