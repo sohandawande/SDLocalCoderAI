@@ -19,6 +19,7 @@ namespace SD.LocalCoder.AI.Api.Controllers.Chat
         /// Chat with optional repository context.
         /// When RepoId is provided, relevant files from that repo are injected into the prompt
         /// so the model can follow your existing style and architecture.
+        /// Optional Paths pins specific files first; remaining budget uses prompt-ranked selection.
         /// </summary>
         [HttpPost]
         public async Task<IActionResult> Chat([FromBody] ChatWithRepoRequest request, CancellationToken cancellationToken)
@@ -26,7 +27,8 @@ namespace SD.LocalCoder.AI.Api.Controllers.Chat
             if (string.IsNullOrWhiteSpace(request?.Prompt))
                 return BadRequest(new { error = "Prompt is required" });
 
-            var (success, response, error) = await _chatService.ChatAsync(request, cancellationToken);
+            var (success, response, error, includedPaths) =
+                await _chatService.ChatAsync(request, cancellationToken);
 
             if (!success)
                 return StatusCode(500, new { error = error ?? "Chat failed" });
@@ -35,7 +37,8 @@ namespace SD.LocalCoder.AI.Api.Controllers.Chat
             {
                 response,
                 model = "qwen2.5-coder:14b",
-                repoId = request.RepoId
+                repoId = request.RepoId,
+                includedPaths = includedPaths ?? Array.Empty<string>()
             });
         }
     }
